@@ -1,7 +1,7 @@
 <template>
   <div class="url-parser-demo">
     <h2>URL参数解析演示</h2>
-    
+
     <!-- 当前URL信息 -->
     <div class="section">
       <h3>当前URL信息</h3>
@@ -15,13 +15,51 @@
       </div>
     </div>
 
+    <!-- 原生 window.location.search -->
+    <div class="section">
+      <h3>原生 window.location.search</h3>
+      <div class="location-info">
+        <p>
+          <strong>window.location.search:</strong>
+          <code>{{ locationSearch || "(空)" }}</code>
+        </p>
+        <p><strong>解析后的参数:</strong></p>
+        <div v-if="Object.keys(locationSearchParams).length > 0" class="params">
+          <div
+            v-for="(value, key) in locationSearchParams"
+            :key="key"
+            class="param-item"
+          >
+            <strong>{{ key }}:</strong>
+            <span v-if="Array.isArray(value)">{{ value.join(", ") }}</span>
+            <span v-else>{{ value }}</span>
+          </div>
+        </div>
+        <p v-else class="no-params">没有查询参数</p>
+
+        <div class="debug-controls">
+          <button @click="logCurrentUrlInfo" class="debug-btn">
+            在控制台打印URL信息
+          </button>
+          <button @click="showLocationDetails" class="debug-btn">
+            显示详细信息
+          </button>
+        </div>
+
+        <div v-if="showDetails" class="location-details">
+          <h4>详细的 window.location 信息:</h4>
+          <pre>{{ locationDetails }}</pre>
+        </div>
+      </div>
+    </div>
+
     <!-- 查询参数 -->
     <div class="section">
-      <h3>查询参数</h3>
+      <h3>URLParser 解析的查询参数</h3>
       <div v-if="Object.keys(queryParams).length > 0" class="params">
         <div v-for="(value, key) in queryParams" :key="key" class="param-item">
-          <strong>{{ key }}:</strong> 
-          <span v-if="Array.isArray(value)">{{ value.join(', ') }}</span>
+          <strong>{{ key }}:</strong>
+          <span v-if="Array.isArray(value)">{{ value.join(", ") }}</span>
           <span v-else>{{ value }}</span>
         </div>
       </div>
@@ -33,8 +71,8 @@
       <h3>Hash参数</h3>
       <div v-if="Object.keys(hashParams).length > 0" class="params">
         <div v-for="(value, key) in hashParams" :key="key" class="param-item">
-          <strong>{{ key }}:</strong> 
-          <span v-if="Array.isArray(value)">{{ value.join(', ') }}</span>
+          <strong>{{ key }}:</strong>
+          <span v-if="Array.isArray(value)">{{ value.join(", ") }}</span>
           <span v-else>{{ value }}</span>
         </div>
       </div>
@@ -45,15 +83,15 @@
     <div class="section">
       <h3>测试URL解析</h3>
       <div class="input-group">
-        <input 
-          v-model="testUrl" 
-          type="text" 
+        <input
+          v-model="testUrl"
+          type="text"
           placeholder="输入要解析的URL"
           class="url-input"
         />
         <button @click="parseTestUrl" class="parse-btn">解析</button>
       </div>
-      
+
       <div v-if="testResult" class="test-result">
         <h4>解析结果:</h4>
         <pre>{{ JSON.stringify(testResult, null, 2) }}</pre>
@@ -69,12 +107,12 @@
           <input v-model="newParamValue" placeholder="参数值" />
           <button @click="addParam">添加参数</button>
         </div>
-        
+
         <div class="control-group">
           <input v-model="removeParamKey" placeholder="要移除的参数名" />
           <button @click="removeParam">移除参数</button>
         </div>
-        
+
         <button @click="clearAllParams" class="clear-btn">清空所有参数</button>
       </div>
     </div>
@@ -92,95 +130,144 @@
 </template>
 
 <script>
-import URLParser from '@/utils/urlParser.js'
+import URLParser from "@/utils/urlParser.js";
+import { logLocationInfo, getLocationInfo } from "@/utils/simpleUrlParser.js";
 
 export default {
-  name: 'URLParserDemo',
+  name: "URLParserDemo",
   data() {
     return {
       currentUrl: {},
       queryParams: {},
       hashParams: {},
-      testUrl: '',
+      locationSearch: "",
+      locationSearchParams: {},
+      showDetails: false,
+      locationDetails: "",
+      testUrl: "",
       testResult: null,
-      newParamKey: '',
-      newParamValue: '',
-      removeParamKey: ''
-    }
+      newParamKey: "",
+      newParamValue: "",
+      removeParamKey: "",
+    };
   },
   mounted() {
-    this.updateCurrentUrl()
+    this.updateCurrentUrl();
     // 监听URL变化
-    window.addEventListener('popstate', this.updateCurrentUrl)
+    window.addEventListener("popstate", this.updateCurrentUrl);
   },
   beforeUnmount() {
-    window.removeEventListener('popstate', this.updateCurrentUrl)
+    window.removeEventListener("popstate", this.updateCurrentUrl);
   },
   methods: {
     updateCurrentUrl() {
-      this.currentUrl = URLParser.parseURL()
-      this.queryParams = URLParser.parseQuery()
-      this.hashParams = URLParser.parseHash()
+      this.currentUrl = URLParser.parseURL();
+      this.queryParams = URLParser.parseQuery();
+      this.hashParams = URLParser.parseHash();
+
+      // 使用原生 window.location.search
+      this.locationSearch = window.location.search;
+      this.locationSearchParams = this.parseLocationSearch();
     },
-    
-    parseTestUrl() {
-      if (this.testUrl) {
-        this.testResult = URLParser.parseURL(this.testUrl)
+
+    // 解析 window.location.search 的方法
+    parseLocationSearch() {
+      const params = {};
+      const searchParams = new URLSearchParams(window.location.search);
+
+      searchParams.forEach((value, key) => {
+        // 处理数组参数（如：?tags=vue&tags=js）
+        if (params[key]) {
+          if (Array.isArray(params[key])) {
+            params[key].push(value);
+          } else {
+            params[key] = [params[key], value];
+          }
+        } else {
+          params[key] = value;
+        }
+      });
+
+      return params;
+    },
+
+    // 在控制台打印URL信息
+    logCurrentUrlInfo() {
+      logLocationInfo();
+    },
+
+    // 显示详细的location信息
+    showLocationDetails() {
+      this.showDetails = !this.showDetails;
+      if (this.showDetails) {
+        this.locationDetails = JSON.stringify(getLocationInfo(), null, 2);
       }
     },
-    
+
+    parseTestUrl() {
+      if (this.testUrl) {
+        this.testResult = URLParser.parseURL(this.testUrl);
+      }
+    },
+
     addParam() {
       if (this.newParamKey && this.newParamValue) {
         URLParser.updateQuery({
-          [this.newParamKey]: this.newParamValue
-        })
-        this.updateCurrentUrl()
-        this.newParamKey = ''
-        this.newParamValue = ''
+          [this.newParamKey]: this.newParamValue,
+        });
+        this.updateCurrentUrl();
+        this.newParamKey = "";
+        this.newParamValue = "";
       }
     },
-    
+
     removeParam() {
       if (this.removeParamKey) {
-        URLParser.removeQuery(this.removeParamKey)
-        this.updateCurrentUrl()
-        this.removeParamKey = ''
+        URLParser.removeQuery(this.removeParamKey);
+        this.updateCurrentUrl();
+        this.removeParamKey = "";
       }
     },
-    
+
     clearAllParams() {
-      const keys = Object.keys(this.queryParams)
+      const keys = Object.keys(this.queryParams);
       if (keys.length > 0) {
-        URLParser.removeQuery(keys)
-        this.updateCurrentUrl()
+        URLParser.removeQuery(keys);
+        this.updateCurrentUrl();
       }
     },
-    
+
     loadExample1() {
-      URLParser.updateQuery({
-        name: 'Vue项目',
-        version: '3.2.13',
-        type: 'demo'
-      }, true)
-      this.updateCurrentUrl()
+      URLParser.updateQuery(
+        {
+          name: "Vue项目",
+          version: "3.2.13",
+          type: "demo",
+        },
+        true
+      );
+      this.updateCurrentUrl();
     },
-    
+
     loadExample2() {
-      URLParser.updateQuery({
-        tags: ['vue', 'javascript', 'frontend'],
-        category: 'web'
-      }, true)
-      this.updateCurrentUrl()
+      URLParser.updateQuery(
+        {
+          tags: ["vue", "javascript", "frontend"],
+          category: "web",
+        },
+        true
+      );
+      this.updateCurrentUrl();
     },
-    
+
     loadExample3() {
-      window.location.hash = 'section=demo&tab=parser&mode=test'
+      window.location.hash = "section=demo&tab=parser&mode=test";
       setTimeout(() => {
-        this.updateCurrentUrl()
-      }, 100)
-    }
-  }
-}
+        this.updateCurrentUrl();
+      }, 100);
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -244,7 +331,8 @@ export default {
   border-radius: 4px;
 }
 
-.parse-btn, button {
+.parse-btn,
+button {
   padding: 8px 16px;
   background-color: #007bff;
   color: white;
@@ -253,7 +341,8 @@ export default {
   cursor: pointer;
 }
 
-.parse-btn:hover, button:hover {
+.parse-btn:hover,
+button:hover {
   background-color: #0056b3;
 }
 
@@ -308,5 +397,67 @@ export default {
 
 .examples button:hover {
   background-color: #218838;
+}
+
+.location-info {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.location-info code {
+  background-color: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  color: #495057;
+  word-break: break-all;
+}
+
+.debug-controls {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.debug-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.debug-btn:hover {
+  background-color: #5a6268;
+}
+
+.location-details {
+  margin-top: 15px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.location-details h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #495057;
+}
+
+.location-details pre {
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 3px;
+  padding: 10px;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 0;
 }
 </style>
