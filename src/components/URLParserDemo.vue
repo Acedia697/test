@@ -117,6 +117,60 @@
       </div>
     </div>
 
+    <!-- 支付请求示例 -->
+    <div class="section">
+      <h3>支付请求示例</h3>
+      <div class="payment-demo">
+        <div class="input-group">
+          <label>模拟支付URL:</label>
+          <input
+            v-model="paymentUrl"
+            type="text"
+            placeholder="https://example.com/payment?type=alipay&id=12345"
+            class="payment-url-input"
+          />
+        </div>
+
+        <div class="payment-params" v-if="parsedPaymentParams">
+          <h4>解析到的支付参数:</h4>
+          <div class="param-display">
+            <p>
+              <strong>支付类型 (type):</strong>
+              {{ parsedPaymentParams.type || "未设置" }}
+            </p>
+            <p>
+              <strong>订单ID (id):</strong>
+              {{ parsedPaymentParams.id || "未设置" }}
+            </p>
+          </div>
+        </div>
+
+        <div class="payment-controls">
+          <button @click="parsePaymentUrl" class="parse-payment-btn">
+            解析支付URL
+          </button>
+          <button
+            @click="sendPaymentRequest"
+            :disabled="!canSendPayment"
+            class="send-payment-btn"
+          >
+            发送支付请求
+          </button>
+        </div>
+
+        <div v-if="paymentResult" class="payment-result">
+          <h4>请求结果:</h4>
+          <div
+            class="result-status"
+            :class="paymentResult.success ? 'success' : 'error'"
+          >
+            {{ paymentResult.success ? "✅ 请求成功" : "❌ 请求失败" }}
+          </div>
+          <pre>{{ JSON.stringify(paymentResult, null, 2) }}</pre>
+        </div>
+      </div>
+    </div>
+
     <!-- 常用示例 -->
     <div class="section">
       <h3>常用示例</h3>
@@ -124,6 +178,7 @@
         <button @click="loadExample1">示例1: 基本参数</button>
         <button @click="loadExample2">示例2: 数组参数</button>
         <button @click="loadExample3">示例3: Hash参数</button>
+        <button @click="loadPaymentExample">示例4: 支付URL</button>
       </div>
     </div>
   </div>
@@ -149,7 +204,21 @@ export default {
       newParamKey: "",
       newParamValue: "",
       removeParamKey: "",
+      // 支付相关数据
+      paymentUrl: "https://example.com/payment?type=alipay&id=12345",
+      parsedPaymentParams: null,
+      paymentResult: null,
     };
+  },
+  computed: {
+    // 检查是否可以发送支付请求
+    canSendPayment() {
+      return (
+        this.parsedPaymentParams &&
+        this.parsedPaymentParams.type &&
+        this.parsedPaymentParams.id
+      );
+    },
   },
   mounted() {
     this.updateCurrentUrl();
@@ -265,6 +334,89 @@ export default {
       setTimeout(() => {
         this.updateCurrentUrl();
       }, 100);
+    },
+
+    // 加载支付URL示例
+    loadPaymentExample() {
+      this.paymentUrl =
+        "https://example.com/payment?type=wechat&id=ORDER_20231201_001";
+      this.parsePaymentUrl();
+    },
+
+    // 解析支付URL
+    parsePaymentUrl() {
+      try {
+        if (this.paymentUrl) {
+          const params = URLParser.parseQuery(this.paymentUrl);
+          this.parsedPaymentParams = {
+            type: params.type || null,
+            id: params.id || null,
+          };
+          this.paymentResult = null; // 清除之前的结果
+        }
+      } catch (error) {
+        console.error("解析支付URL失败:", error);
+        this.parsedPaymentParams = null;
+      }
+    },
+
+    // 发送支付请求
+    async sendPaymentRequest() {
+      if (!this.canSendPayment) {
+        alert("请先解析有效的支付URL");
+        return;
+      }
+
+      try {
+        // 构建请求数据
+        const requestData = {
+          orderId: this.parsedPaymentParams.id,
+          paymentMethodType: this.parsedPaymentParams.type,
+          resourceType: "android",
+        };
+
+        console.log("发送支付请求:", requestData);
+
+        // 发送POST请求
+        const response = await fetch(
+          "https://eotoai-app.caideai.com/app/pay/elepay",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // 如果需要其他headers，可以在这里添加
+              // 'Authorization': 'Bearer your-token',
+            },
+            body: JSON.stringify(requestData),
+          }
+        );
+
+        const result = await response.json();
+
+        this.paymentResult = {
+          success: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          data: result,
+          requestData: requestData,
+          timestamp: new Date().toISOString(),
+        };
+
+        console.log("支付请求结果:", this.paymentResult);
+      } catch (error) {
+        console.error("支付请求失败:", error);
+
+        this.paymentResult = {
+          success: false,
+          error: error.message,
+          requestData: {
+            orderId: this.parsedPaymentParams.id,
+            paymentMethodType: this.parsedPaymentParams.type,
+            resourceType: "android",
+          },
+          timestamp: new Date().toISOString(),
+        };
+      }
     },
   },
 };
@@ -456,6 +608,109 @@ button:hover {
   border: 1px solid #e9ecef;
   border-radius: 3px;
   padding: 10px;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 0;
+}
+
+/* 支付相关样式 */
+.payment-demo {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid #007bff;
+}
+
+.payment-url-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.payment-params {
+  margin: 15px 0;
+  padding: 15px;
+  background-color: #e7f3ff;
+  border-radius: 4px;
+  border-left: 4px solid #007bff;
+}
+
+.param-display p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.payment-controls {
+  display: flex;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.parse-payment-btn {
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.parse-payment-btn:hover {
+  background-color: #138496;
+}
+
+.send-payment-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.send-payment-btn:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.send-payment-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.payment-result {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 4px;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+}
+
+.result-status {
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.result-status.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.result-status.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.payment-result pre {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
   font-size: 12px;
   overflow-x: auto;
   margin: 0;
